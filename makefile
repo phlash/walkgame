@@ -1,4 +1,4 @@
-all: bin bin\walkgame.exe
+all: bin bin\walkgame.exe bin\svgablit.exe
 
 clean:
 	-del bin\*.*
@@ -20,3 +20,6 @@ bin\walkgame.exe: bin\walkgame.obj bin\drawlib.lib
 bin\drawlib.lib: bin\drawlib.obj
 	-@del $@
 	tlib bin\drawlib.lib +bin\drawlib.obj
+
+bin\svgablit.exe: bin\svgablit.obj
+	tlink c0l.obj bin\svgablit.obj, bin\svgablit.exe,,emu mathl cl -Lturboc3\tc\lib
