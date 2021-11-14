@@ -125,6 +125,8 @@ int main(int argc, char **argv) {
     int drag = 2;
     int accel = 7;
 
+    dmode_t dm = DMODE_HIGHEST;
+
     for (i=1; i<argc; i++) {
         if (strncmp(argv[i],"-f",2)==0)
             sfps=1;
@@ -132,11 +134,17 @@ int main(int argc, char **argv) {
         //    wnam=argv[++i];
         else if (strncmp(argv[i],"-l",2)==0)
             wg_log=fopen(argv[++i], "wt");
+        else if (strncmp(argv[i],"-3",2)==0)
+            dm = DMODE_320x200;
+        else if (strncmp(argv[i],"-6",2)==0)
+            dm = DMODE_640x480;
+        else if (strncmp(argv[i],"-8",2)==0)
+            dm = DMODE_800x600;
         else
             return printf("usage: %s [-f (show fps)] [-w <wad file>] [-l <wg_log file>]\n", argv[0]);
     }
     if (wg_log) fprintf(wg_log, "starting\n");
-    if (videomode()) {
+    if (videomode(dm)) {
         fputs("unable to enter graphics mode :=(", stderr);
         return 1;
     }
@@ -161,17 +169,27 @@ int main(int argc, char **argv) {
     if (!boom)
         goto oops;
     err=NULL;
+    for(i=0;; i+=10) {
+        wg_textout(i, i, "TEST ME!");
+        drefresh(0);
+        if (0x1b==getch())
+            break;
+    }
+    goto oops;
     // grab keyboard
     wg_installkeys();
     // instructions!
-    while (!wg_keys[WGK_ENTER]) {
+    while (!wg_keys[WGK_ENTER] && !wg_keys[WGK_ESC]) {
         wg_textout(10, 10, "EVIL APPLES WILL EAT YOU");
         wg_textout(10, 30, "REACH THE ORANGE PORTAL 10 TIMES");
         wg_textout(10, 50, "TO ESCAPE!");
         wg_textout(40, NUM_ROW-20, "PRESS ENTER TO PLAY...");
         waitV();
         drefresh(0);
+        printf("refresh\n");
     }
+    if (wg_keys[WGK_ESC])
+        goto oops;
     // generate sin/cos tables, scaled to NUM_ROW/3
     for (i=0; i<NTRIG; i++) {
         double a = (double)i*2.0*M_PI/(double)NTRIG;

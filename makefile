@@ -17,9 +17,9 @@ bin:
 bin\walkgame.exe: bin\walkgame.obj bin\drawlib.lib
 	tlink c0l.obj bin\walkgame.obj bin\drawlib.lib, bin\walkgame.exe,,emu mathl cl -Lturboc3\tc\lib
 
-bin\drawlib.lib: bin\drawlib.obj
+bin\drawlib.lib: bin\drawlib.obj bin\vesa.obj
 	-@del $@
-	tlib bin\drawlib.lib +bin\drawlib.obj
+	tlib bin\drawlib.lib +bin\drawlib.obj+bin\vesa.obj
 
 bin\svgablit.exe: bin\svgablit.obj
 	tlink c0l.obj bin\svgablit.obj, bin\svgablit.exe,,emu mathl cl -Lturboc3\tc\lib

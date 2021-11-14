@@ -2,14 +2,27 @@
 #include <dos.h>
 #include <string.h>
 #include <malloc.h>
+#include <vesa.h>
 #include <drawlib.h>
 
 // ------ DRAWING LIBRARY CODE --------
 
-// video memory
+// video memory (64kB window)
 static unsigned char *vmem = MK_FP(0xa000,0);
-// drawing buffer
-static unsigned char *dmem;
+// drawing buffer, split into rows to avoid huge pointer problems..
+static unsigned char **dmem;
+// current graphics mode
+static dmode_t mode;
+// VESA access info (if set)
+static vbe_access_t vacc;
+
+// screen dimension (or -1 if not in graphics mode)
+int dscreenwidth(void) {
+    return DMODE_320x200==mode ? 320 : DMODE_640x480==mode ? 640 : DMODE_800x600==mode ? 800 : -1;
+}
+int dscreenheight(void) {
+    return DMODE_320x200==mode ? 200 : DMODE_640x480==mode ? 480 : DMODE_800x600==mode ? 600 : -1;
+}
 
 int dline(int sx, int sy, int ex, int ey, int pix) {
     // naive (unclipped) line
@@ -27,7 +40,7 @@ int dline(int sx, int sy, int ex, int ey, int pix) {
         int y = sy;
         dy = (ey<sy) ? -1 : 1;
         do {
-            dmem[ROW_LEN*y+sx] = (unsigned char)pix;
+            dmem[y][sx] = (unsigned char)pix;
             if (y!=ey)  // special case of ey==sy
                 y += dy;
         } while (y!=ey);
@@ -36,7 +49,7 @@ int dline(int sx, int sy, int ex, int ey, int pix) {
         int x = sx;
         dx = (ex<sx) ? -1: 1;
         do {
-            dmem[ROW_LEN*sy+x] = (unsigned char )pix;
+            dmem[sy][x] = (unsigned char )pix;
             if (x!=ex)
                 x += dx;
         } while (x!=ex);
@@ -46,11 +59,11 @@ int dline(int sx, int sy, int ex, int ey, int pix) {
         dy = (ey<sy) ? -1 : 1;
         dx = ex-sx;
         do {
-            dmem[ROW_LEN*y+x] = (unsigned char)pix;
+            dmem[y][x] = (unsigned char)pix;
             if (p!=l) {
                 p += 1;
                 y += dy;
-                x = sx + (p*dx)/l;
+                x = sx + (int)(((long)p*(long)dx)/(long)l);
             }
         } while (p!=l);
     } else {
@@ -59,11 +72,11 @@ int dline(int sx, int sy, int ex, int ey, int pix) {
         dx = (ex<sx) ? -1 : 1;
         dy = ey-sy;
         do {
-            dmem[ROW_LEN*y+x] = (unsigned char)pix;
+            dmem[y][x] = (unsigned char)pix;
             if (p!=l) {
                 p += 1;
                 x += dx;
-                y = sy + (p*dy)/l;
+                y = sy + (int)(((long)p*(long)dy)/(long)l);
             }
         } while (p!=l);
     }
@@ -84,16 +97,16 @@ int _dfillrow(_dflood_t *pf, int x, int y, int dy, int *sx, int nx) {
     // internal function to flood one row
     int b;
     // scan left until border found or we hit minx
-    while (x>pf->minx && dmem[ROW_LEN*y+x]!=pf->pix)
+    while (x>pf->minx && dmem[y][x]!=pf->pix)
         x-=1;
     // scan right until border found or we hit maxx, filling pixels
     // and recording seed points in adjacent row (according to dy)
     x+=1;
     b = 1;
-    while (x<pf->maxx && dmem[ROW_LEN*y+x]!=pf->pix) {
-        dmem[ROW_LEN*y+x] = (unsigned char)pf->fill;
+    while (x<pf->maxx && dmem[y][x]!=pf->pix) {
+        dmem[y][x] = (unsigned char)pf->fill;
         if ((y+dy)>=pf->miny && (y+dy)<pf->maxy) {
-            if (dmem[ROW_LEN*(y+dy)+x]!=pf->pix) {
+            if (dmem[y+dy][x]!=pf->pix) {
                 if (b)
                     sx[nx++] = x;
                 b = 0;
@@ -108,7 +121,9 @@ int _dfillrow(_dflood_t *pf, int x, int y, int dy, int *sx, int nx) {
 void _dfloodfill(_dflood_t *pf, int x, int y) {
     // internal row-based floodfill
     int sy, nx, dx, wx;
-    static int sx[2][ROW_LEN/2];
+    int *sx[2];
+    sx[0] = malloc(ROW_LEN/2*sizeof(int));
+    sx[1] = malloc(ROW_LEN/2*sizeof(int));
     // fill seed row, find seed points in previous row
     sy = y;
     dx = 1;
@@ -135,6 +150,8 @@ void _dfloodfill(_dflood_t *pf, int x, int y) {
         wx = 1-wx;
         dx = nx;
     }
+    free(sx[0]);
+    free(sx[1]);
 }
 void dfloodfill(int x, int y, int pix, int fill) {
     // public floodfill (extent == whole screen)
@@ -188,7 +205,7 @@ int dimageget(int x, int y, int w, int h, void *b, int l) {
     *(int *)f = h;
     f += sizeof(int);
     for (row=y; row<y+h; row++) {
-        memcpy(f, &dmem[ROW_LEN*row+x], w);
+        memcpy(f, dmem[row]+x, w);
         f += w;
     }
     return dimagesize(w, h);
@@ -200,11 +217,11 @@ int dimagegetpixel(void *b, int l, int x, int y){
     f += sizeof(int);
     h = *(int *)f;
     f += sizeof(int);
-
+    if (w<0 || h<0 || dimagesize(w, h)>l)
+        return -1;  // buffer invalid
     if (x<0 || x>w || y<0 || y>h){
-        return -2;
+        return -2;  // out-of-bounds
     }
-
     return f[y*w + x];
 }
 int dimageput(int x, int y, int sx, int sy, int sw, int sh, void *b, int l, int t) {
@@ -226,13 +243,13 @@ int dimageput(int x, int y, int sx, int sy, int sw, int sh, void *b, int l, int 
     if (x<0 || x+sw>ROW_LEN || y<0 || y+sh>NUM_ROW)
         return -2;  // out of bounds
     for (row=y; row<y+sh; row++) {
-        int col;
         if (t<0) {
-            memcpy(&dmem[ROW_LEN*row+x], f+sx, sw);
+            memcpy(dmem[row]+x, f+sx, sw);
         } else {
+            int col;
             for (col=0; col<sw; col++) {
                 if (f[col+sx]!=t)
-                    dmem[ROW_LEN*row+x+col] = f[col+sx];
+                    dmem[row][col+x] = f[col+sx];
             }
         }
         f += w;
@@ -240,32 +257,92 @@ int dimageput(int x, int y, int sx, int sy, int sw, int sh, void *b, int l, int 
     return dimagesize(w, h);
 }
 void drefresh(int index) {
-    // refresh the video display
-    memcpy(vmem, dmem, ROW_LEN*NUM_ROW);
-    memset(dmem, index, ROW_LEN*NUM_ROW);
+    // refresh the video display, clear the draw buffer
+    int row;
+    if (DMODE_320x200==mode) {
+        // local option - blit the rows and clear 64k
+        for (row=0; row<dscreenheight(); row++) {
+            int w = dscreenwidth();
+            memcpy(vmem+(row*w), dmem[row], dscreenwidth());
+            memset(dmem[row], index, w);
+        }
+    } else {
+        // VBE option - banked blit (in vesa.c), chunked clear
+        vblit(dmem, &vacc);
+        for (row=0; row<dscreenheight(); row++)
+            memset(dmem[row], index, dscreenwidth());
+    }
 }
 static unsigned char oldmode;
-int videomode() {
-    // set required video mode, allocate drawing buffer
-    union REGS regs;
-    dmem = calloc(NUM_ROW, ROW_LEN);
-    if (!dmem)
+int videomode(dmode_t req) {
+    // anything other than VGA 320x200, we check VBE
+    if (DMODE_320x200!=req) {
+        int test = (int)DMODE_800x600 + 1;
+        do {
+            uint16_t vmode;
+            int rw, rh;
+            test = DMODE_HIGHEST==req ? test-1 : (int)req;
+            rw = DMODE_640x480==test ? 640 : 800;
+            rh = DMODE_640x480==test ? 480 : 600;
+            printf("vfindmode: test:%d rw:%d rh:%d\n", test, rw, rh);
+            vmode = vfindmode(rw, rh, &vacc);
+            if (vmode>0) {
+                mode = (dmode_t)test;
+                printf("vsetmode: 0x%04x\n", vmode);
+                oldmode = vsetmode(vmode);
+            }
+        } while (DMODE_HIGHEST==mode && DMODE_HIGHEST==req && test>DMODE_640x480);
+    }
+    // if we didn't find a working VBE mode, or we were asked for VGA 320x200
+    if (DMODE_HIGHEST==mode && (DMODE_320x200==req || DMODE_HIGHEST==req)) {
+        // set requested video mode
+        union REGS regs;
+        mode = DMODE_320x200;
+        regs.h.ah = 0x0f;
+        int86(0x10, &regs, &regs);
+        oldmode = regs.h.al;
+        regs.h.ah = 0x00;
+        regs.h.al = 0x13;       // ye infamous MODE 13h (320x200x256)
+        int86(0x10, &regs, &regs);
+    }
+    // no mode set? bail.
+    if (DMODE_HIGHEST==mode)
         return -1;
-    regs.h.ah = 0x0f;
-    int86(0x10, &regs, &regs);
-    oldmode = regs.h.al;
-    regs.h.ah = 0x00;
-    regs.h.al = 0x13;       // ye infamous MODE 13h (320x200x256)
-    int86(0x10, &regs, &regs);
+    // allocate a drawing buffer as a set of rows
+    dmem = _fcalloc(dscreenheight(), sizeof(unsigned char *));
+    if (dmem) {
+        int row;
+        for (row=0; row<dscreenheight(); row++) {
+            dmem[row] = _fcalloc(dscreenwidth(), sizeof(unsigned char));
+            if (!dmem[row]) {
+                dmem = NULL;
+                break;
+            }
+        }
+    }
+    if (!dmem) {
+        // oops - no memory left
+        printf("out of memory :=(\n");
+        restoremode();
+        return -1;
+    }
     return 0;
 }
 void restoremode() {
     // done!
-    union REGS regs;
-    regs.h.ah = 0x00;
-    regs.h.al = oldmode;
-    int86(0x10, &regs, &regs);
-    free(dmem);
+    if (mode>DMODE_HIGHEST) {
+        union REGS regs;
+        regs.h.ah = 0x00;
+        regs.h.al = oldmode;
+        int86(0x10, &regs, &regs);
+        if (dmem) {
+            int row;
+            for (row=0; row<dscreenheight(); row++)
+                _ffree(dmem[row]);
+            _ffree(dmem);
+        }
+        mode = DMODE_HIGHEST;
+    }
 }
 
 // ------ UTILITY CODE -------

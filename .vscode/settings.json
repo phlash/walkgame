@@ -1,0 +1,9 @@
+{
+    "C_Cpp.default.systemIncludePath": [
+        "${workspaceFolder}/turboc3/tc/include"
+    ],
+    "files.associations": {
+        "dos.h": "c",
+        "drawlib.h": "c"
+    }
+}
