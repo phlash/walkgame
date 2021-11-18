@@ -8,6 +8,9 @@
 #include <string.h>
 #include <math.h>
 #include <drawlib.h>
+#ifdef DJGPP
+#include <dpmi.h>
+#endif
 
 // keyboard input, requires an interrupt handler..
 #define WGK_ESC				0x01
@@ -21,6 +24,33 @@
 
 static FILE *wg_log;
 
+#ifdef DJGPP
+static volatile unsigned char wg_keys[128];
+// @see http://www.delorie.com/djgpp/doc/libc/libc_446.html
+static void wg_newk(void) {
+	unsigned char keyhit = inportb(0x60);
+	unsigned char ack = inportb(0x61);
+	outportb(0x61, ack|0x80);
+	outportb(0x61, ack);
+	outportb(0x20, 0x20);
+	if (keyhit & 0x80){ keyhit &= 0x7F; wg_keys[keyhit] = 0;} //KEY_RELEASED;
+    else wg_keys[keyhit] = 1; //KEY_PRESSED;
+}
+static _go32_dpmi_seginfo wg_oldk, wg_ourk;
+static void wg_installkeys(void) {
+    memset((void *)wg_keys, 0, sizeof(wg_keys));
+	_go32_dpmi_get_protected_mode_interrupt_vector(9, &wg_oldk);
+	wg_ourk.pm_offset = (int)wg_newk;
+	_go32_dpmi_allocate_iret_wrapper(&wg_ourk);
+	_go32_dpmi_set_protected_mode_interrupt_vector(9, &wg_ourk);
+}
+static void wg_removekeys(void) {
+	if (wg_oldk.pm_offset) {
+		_go32_dpmi_set_protected_mode_interrupt_vector(9, &wg_oldk);
+		_go32_dpmi_free_iret_wrapper(&wg_ourk);
+	}
+}
+#else
 static unsigned char wg_keys[128];
 static void interrupt (*wg_oldk)(void);
 static void interrupt wg_newk(void) {
@@ -52,6 +82,7 @@ static void wg_removekeys(void) {
     if (wg_oldk)
         setvect(9, wg_oldk);
 }
+#endif
 
 // text output
 int wg_textout(int x, int y, const char *msg) {
@@ -105,7 +136,11 @@ int collide(int x1, int y1, int w1, int h1, int x2, int y2, int w2, int h2) {
 
 // game loop..
 #define MAX_OBS 15          // maximum no of obstacles
+#ifdef DJGPP
+#define OBS_TCK 75			// ticks (91Hz) between obstacle spawns
+#else
 #define OBS_TCK 15          // ticks (18.2Hz) between obstacle spawns
+#endif
 static int s_nobs;          // spawned obstacle count
 static int s_obs[MAX_OBS][3];// co-ordinates and y movement of obstacles
 #define WIN_GOALS   10      // number of times to hit the goal to win!!
@@ -140,6 +175,8 @@ int main(int argc, char **argv) {
             dm = DMODE_640x480;
         else if (strncmp(argv[i],"-8",2)==0)
             dm = DMODE_800x600;
+        else if (strncmp(argv[i],"-1",2)==0)
+            dm = DMODE_1024x768;
         else
             return printf("usage: %s [-f (show fps)] [-w <wad file>] [-l <wg_log file>]\n", argv[0]);
     }
@@ -169,13 +206,6 @@ int main(int argc, char **argv) {
     if (!boom)
         goto oops;
     err=NULL;
-    for(i=0;; i+=10) {
-        wg_textout(i, i, "TEST ME!");
-        drefresh(0);
-        if (0x1b==getch())
-            break;
-    }
-    goto oops;
     // grab keyboard
     wg_installkeys();
     // instructions!
@@ -186,7 +216,6 @@ int main(int argc, char **argv) {
         wg_textout(40, NUM_ROW-20, "PRESS ENTER TO PLAY...");
         waitV();
         drefresh(0);
-        printf("refresh\n");
     }
     if (wg_keys[WGK_ESC])
         goto oops;
@@ -211,8 +240,8 @@ int main(int argc, char **argv) {
         // spawn new obstacle?
         if (s_nobs<MAX_OBS && lst+OBS_TCK<now) {
             s_obs[s_nobs][0]=0;
-            s_obs[s_nobs][1]=random(NUM_ROW-dimageheight(obj));
-            s_obs[s_nobs][2]=random(5)-2;
+            s_obs[s_nobs][1]=(rand()%(NUM_ROW-dimageheight(obj)));
+            s_obs[s_nobs][2]=(rand()%5)-2;
             if (wg_log) fprintf(wg_log, "spawn: %d@%d/%d/%d\n", s_nobs, s_obs[s_nobs][0], s_obs[s_nobs][1], s_obs[s_nobs][2]);
             s_nobs+=1;
             lst=now;

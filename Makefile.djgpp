@@ -1,0 +1,25 @@
+# Cross-compile for DJGPP targets..
+
+# where's our toolkit?
+DJGPP=../djgpp
+PFX=$(DJGPP)/bin/i586-pc-msdosdjgpp-
+EXE2COFF=$(DJGPP)/i586-pc-msdosdjgpp/bin/exe2coff
+CWSDSTUB=$(DJGPP)/CWSDSTUB.EXE
+
+all: djgpp djgpp/walkgame.exe
+
+clean:
+	rm -rf djgpp
+
+djgpp:
+	mkdir -p djgpp
+
+# We replace the default stub with self-hosted dpmi server one..
+djgpp/walkgame.exe: djgpp/walkgame.o djgpp/drawlib.o djgpp/svga.o
+	$(PFX)gcc -o djgpp/tmp.exe $^
+	$(EXE2COFF) djgpp/tmp.exe
+	cat $(CWSDSTUB) djgpp/tmp > $@
+	rm -f djgpp/tmp*
+
+djgpp/%.o: src/%.c
+	$(PFX)gcc -c -o $@ -Isrc $<

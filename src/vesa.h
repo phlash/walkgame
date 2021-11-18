@@ -3,10 +3,15 @@
 #ifndef _VESA_H
 #define _VESA_H
 
+#ifdef DJGPP
+#include <stdint.h>
+#else
 typedef unsigned char uint8_t;
 typedef unsigned int uint16_t;
 typedef unsigned long uint32_t;
+#endif
 
+#pragma pack(push,1)
 typedef struct {
     char sig[4];
     uint16_t vers;
@@ -23,6 +28,7 @@ typedef struct {
     uint8_t pad1[216];
     uint8_t pad2[256];
 } vbe_info_t;
+#define VBE_CAPS_AF	0x08
 
 typedef struct {
     uint16_t matt;
@@ -59,17 +65,14 @@ typedef struct {
     uint16_t osms;
     uint8_t pad4[206];
 } vbe_mode_t;
+#define VBE_MATT_LFB	0x80
+#pragma pack(pop)
 
-typedef struct {
-    unsigned char *win; // Video bank window
-    uint16_t gran;      // Bank granularity (in 1k units)
-    uint16_t size;      // Bank size (in 1k units)
-    uint16_t widt;      // Mode width (pixels)
-    uint16_t high;      // Mode height (pixels)
-} vbe_access_t;
+extern uint32_t vfindmode(int w, int h, uint16_t *pmode);
+extern int vsetmode(uint16_t mode, uint32_t lfbp);
+extern void vresetmode(void);
 
-extern uint16_t vfindmode(int w, int h, vbe_access_t *pacc);
-extern uint8_t vsetmode(uint16_t m);
-extern void vblit(uint8_t **buf, vbe_access_t *pacc);
+// Request access to LFB when setting a mode
+#define VBE_MODE_REQ_LFB	0x4000
 
 #endif

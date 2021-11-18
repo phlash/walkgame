@@ -1,4 +1,4 @@
-// DRAWLIB - off-screen double buffered drawing library for VGA MODE 13h
+// DRAWLIB - off-screen double buffered drawing library for (S)VGA
 #ifndef _DRAWLIB_
 #define _DRAWLIB_
 
@@ -21,7 +21,8 @@ typedef enum {
     DMODE_HIGHEST,
     DMODE_320x200,
     DMODE_640x480,
-    DMODE_800x600
+    DMODE_800x600,
+	DMODE_1024x768
 } dmode_t;
 extern int videomode(dmode_t mode);
 extern void restoremode();
