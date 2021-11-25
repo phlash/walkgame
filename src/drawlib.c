@@ -2,11 +2,15 @@
 #include <dos.h>
 #include <string.h>
 #include <malloc.h>
-#include <vesa.h>
 #include <drawlib.h>
 #ifdef DJGPP
+#include <vesa.h>
 #include <go32.h>
 #include <dpmi.h>
+#else
+typedef unsigned char uint8_t;
+typedef unsigned int uint16_t;
+typedef unsigned long uint32_t;
 #endif
 
 // ------ DRAWING LIBRARY CODE --------
@@ -201,8 +205,8 @@ int dimagesize(int w, int h) {
 }
 int dimageget(int x, int y, int w, int h, void *b, int l) {
     // grab image into buffer
-    uint8_t *f = (uint8_t *)b;
     int row;
+    uint8_t *f = (uint8_t *)b;
     if (w<0 || h<0 || w>ROW_LEN || h>NUM_ROW)
         return -1;  // invalid size
     if (y<0 || y+h>NUM_ROW || x<0 || x+w>ROW_LEN)
@@ -295,7 +299,7 @@ int videomode(dmode_t req) {
             test = DMODE_HIGHEST==req ? test-1 : (int)req;
             rw = DMODE_640x480==test ? 640 : DMODE_800x600==test ? 800 : 1024;
             rh = DMODE_640x480==test ? 480 : DMODE_800x600==test ? 600 : 768;
-            lfbp = vfindmode(rw, rh, &vmode);
+            lfbp = vfindmode(rw, rh, 8, &vmode);
             if (lfbp>0) {
                 mode = (dmode_t)test;
                 vsel = vsetmode(vmode, lfbp);
@@ -306,8 +310,8 @@ int videomode(dmode_t req) {
             }
         } while (DMODE_HIGHEST==mode && DMODE_HIGHEST==req && test>DMODE_640x480);
 #else
-		fputs("SVGA not supported under TurboC", stderr);
-		return -1;
+		fputs("SVGA not supported under TurboC, using 320x200\n", stderr);
+		req = DMODE_320x200;
 #endif
     }
     // if we didn't find a working VBE mode, or we were asked for VGA 320x200
