@@ -3,13 +3,7 @@
 #ifndef _VESA_H
 #define _VESA_H
 
-#ifdef DJGPP
 #include <stdint.h>
-#else
-typedef unsigned char uint8_t;
-typedef unsigned int uint16_t;
-typedef unsigned long uint32_t;
-#endif
 
 #pragma pack(push,1)
 typedef struct {
@@ -68,7 +62,7 @@ typedef struct {
 #define VBE_MATT_LFB	0x80
 #pragma pack(pop)
 
-extern uint32_t vfindmode(int w, int h, uint16_t *pmode);
+extern uint32_t vfindmode(int w, int h, int bpp, uint16_t *pmode, void (*log)(uint16_t, vbe_mode_t *));
 extern int vsetmode(uint16_t mode, uint32_t lfbp);
 extern void vresetmode(void);
 

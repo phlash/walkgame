@@ -37,7 +37,7 @@ static int vloadinfo(void) {
 	return 0;
 }
 
-uint32_t vfindmode(int rw, int rh, uint16_t *pmode) {
+uint32_t vfindmode(int rw, int rh, int bpp, uint16_t *pmode, void (*log)(uint16_t, vbe_mode_t *)) {
 	// ensure VBE info loaded
 	if (vloadinfo()<0)
 		return 0;
@@ -57,10 +57,12 @@ uint32_t vfindmode(int rw, int rh, uint16_t *pmode) {
 		regs.x.es = (__tb >> 4) & 0xffff;
 		__dpmi_int(0x10, &regs);
 		dosmemget(__tb, sizeof(info), &info);
-		// compare resolution, ensure 256 colour and LFB available
+		if (log)
+			log(mode, &info);
+		// compare resolution & depth, ensure LFB available
 		if (info.widt==rw &&
 			info.high==rh &&
-			info.bppx==8 &&
+			info.bppx==bpp &&
 			(info.matt & VBE_MATT_LFB)) {
 			*pmode = mode;
 			return info.lfbp;

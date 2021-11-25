@@ -299,7 +299,7 @@ int videomode(dmode_t req) {
             test = DMODE_HIGHEST==req ? test-1 : (int)req;
             rw = DMODE_640x480==test ? 640 : DMODE_800x600==test ? 800 : 1024;
             rh = DMODE_640x480==test ? 480 : DMODE_800x600==test ? 600 : 768;
-            lfbp = vfindmode(rw, rh, 8, &vmode);
+            lfbp = vfindmode(rw, rh, 8, &vmode, NULL);
             if (lfbp>0) {
                 mode = (dmode_t)test;
                 vsel = vsetmode(vmode, lfbp);
