@@ -1,3 +1,6 @@
 [submodule "turboc3"]
 	path = turboc3
 	url = https://github.com/phlash/turboc3.git
+[submodule "qoi"]
+	path = qoi
+	url = https://github.com/phoboslab/qoi.git

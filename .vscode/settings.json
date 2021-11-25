@@ -2,12 +2,5 @@
     "C_Cpp.default.systemIncludePath": [
         "${workspaceFolder}/turboc3/tc/include",
         "${workspaceFolder}/../djgpp/i586-pc-msdosdjgpp/sys-include"
-    ],
-    "files.associations": {
-        "dos.h": "c",
-        "drawlib.h": "c",
-        "dpmi.h": "c",
-        "conio.h": "c",
-        "malloc.h": "c"
-    }
+    ]
 }

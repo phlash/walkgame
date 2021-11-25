@@ -5,6 +5,8 @@
 #include <conio.h>
 #include <vesa.h>
 #include <go32.h>
+#define QOI_IMPLEMENTATION
+#include <qoi.h>
 
 void vlog(uint16_t m, vbe_mode_t *info) {
     printf("  mode: 0x%04x w=%d h=%d bpp=%d mod=0x%02x col=%02x lfbp=0x%08x\n",
@@ -16,19 +18,21 @@ int main(int argc, char **argv) {
     int rw = 800;
     int rh = 600;
     int bpp = 32;
-    uint32_t *buf;
+    char *img = "gfx/apple.qoi";
 
     // Process args
     for (int a=1; a<argc; a++) {
         if (strncmp(argv[a],"-?",2)==0)
-            return printf("usage: %s [-?] [-w <width:%d>] [-h <height:%d>] [-b <bits/pixel:%d>]\n",
-                argv[0], rw, rh, bpp);
+            return printf("usage: %s [-?] [-w <width:%d>] [-h <height:%d>] [-b <bits/pixel:%d>] [-i <image:%s>]\n",
+                argv[0], rw, rh, bpp, img);
         else if (strncmp(argv[a],"-w",2)==0)
             sscanf(argv[++a], "%i", &rw);
         else if (strncmp(argv[a],"-h",2)==0)
             sscanf(argv[++a], "%i", &rh);
         else if (strncmp(argv[a],"-b",2)==0)
             sscanf(argv[++a], "%i", &bpp);
+        else if (strncmp(argv[a],"-i",2)==0)
+            img = argv[++a];
     }
     // Find a mode..
     uint16_t mode;
@@ -38,11 +42,16 @@ int main(int argc, char **argv) {
         return 1;
     }
     // Allocate a buffer
-    buf = calloc(rw*rh, sizeof(uint32_t));
+    uint32_t *buf = calloc(rw*rh, sizeof(uint32_t));
     if (!buf) {
         fprintf(stderr, "unable to allocate off-screen buffer :(\n");
         return 1;
     }
+    // Load test image
+    int iw, ih;
+    uint32_t *test = qoi_read(img, &iw, &ih, 4);
+    if (!img)
+        fprintf(stderr, "unable to load: %s\n", img);
     printf("found mode: 0x%04x@0x%08x\n", mode, lfbp);
     getch();
     // Flip it
@@ -52,10 +61,18 @@ int main(int argc, char **argv) {
         return 2;
     }
     // Poke it!
-    for (int y=0; y<rh; y++) {
-        for (int x=0; x<rw; x++) {
-            uint32_t pix = (y<256) ? x&0xff : (y<512) ? (x&0xff)<<8 : (x&0xff)<<16;
-            buf[y*rw+x] = pix;
+    if (test) {
+        for (int y=0; y<rh-ih; y+=ih)
+            for (int x=0; x<rw-iw; x+=iw)
+                for (int iy=0; iy<ih; iy++)
+                    for (int ix=0; ix<iw; ix++)
+                        buf[(y+iy)*rw+x+ix] = test[iy*iw+ix];
+    } else {
+        for (int y=0; y<rh; y++) {
+            for (int x=0; x<rw; x++) {
+                uint32_t pix = (y<256) ? x&0xff : (y<512) ? (x&0xff)<<8 : (x&0xff)<<16;
+                buf[y*rw+x] = pix;
+            }
         }
     }
     clock_t beg = clock();
