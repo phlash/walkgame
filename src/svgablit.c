@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <string.h>
+#include <malloc.h>
+#include <time.h>
 #include <conio.h>
 #include <vesa.h>
 #include <go32.h>
@@ -14,6 +16,7 @@ int main(int argc, char **argv) {
     int rw = 800;
     int rh = 600;
     int bpp = 32;
+    uint32_t *buf;
 
     // Process args
     for (int a=1; a<argc; a++) {
@@ -34,6 +37,12 @@ int main(int argc, char **argv) {
         fprintf(stderr, "unable to find a mode for %dx%dx%d\n", rw, rh, bpp);
         return 1;
     }
+    // Allocate a buffer
+    buf = calloc(rw*rh, sizeof(uint32_t));
+    if (!buf) {
+        fprintf(stderr, "unable to allocate off-screen buffer :(\n");
+        return 1;
+    }
     printf("found mode: 0x%04x@0x%08x\n", mode, lfbp);
     getch();
     // Flip it
@@ -46,11 +55,23 @@ int main(int argc, char **argv) {
     for (int y=0; y<rh; y++) {
         for (int x=0; x<rw; x++) {
             uint32_t pix = (y<256) ? x&0xff : (y<512) ? (x&0xff)<<8 : (x&0xff)<<16;
-            //pix |= 0xff000000;
-            movedata(_my_ds(), (unsigned)&pix, sel, (y*rw+x)*sizeof(uint32_t), sizeof(uint32_t));
+            buf[y*rw+x] = pix;
         }
     }
+    clock_t beg = clock();
+    uint32_t frms = 0;
+    while (!kbhit()) {
+        // flip some bits each frame..
+        uint32_t off = frms%(rh-10);
+        for (int y=0; y<10; y++)
+            for (int x=0; x<10; x++)
+                buf[(y+off)*rw+x+off] ^= 0x00ffffff;
+        movedata(_my_ds(), (unsigned)buf, sel, 0, rw*rh*sizeof(uint32_t));
+        frms+=1;
+    }
+    clock_t end = clock();
     getch();
     vresetmode();
+    printf("FPS: %.2f\n", (double)frms*(double)CLOCKS_PER_SEC/(double)(end-beg));
     return 0;
 }
