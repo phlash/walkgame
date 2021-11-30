@@ -6,10 +6,10 @@ PFX=$(DJGPP)/bin/i586-pc-msdosdjgpp-
 EXE2COFF=$(DJGPP)/i586-pc-msdosdjgpp/bin/exe2coff
 CWSDSTUB=$(DJGPP)/CWSDSTUB.EXE
 
-all: djgpp djgpp/walkgame.exe djgpp/svgablit.exe qoi/qoiconv imgs
+all: djgpp djgpp/walkgame.exe djgpp/svgablit.exe djgpp/bmp2qoi imgs
 
 clean:
-	rm -rf djgpp GFX/*.qoi qoi/qoiconv
+	rm -rf djgpp GFX/*.qoi
 
 djgpp:
 	mkdir -p djgpp
@@ -30,10 +30,10 @@ djgpp/svgablit.exe: djgpp/svgablit.o djgpp/svga.o
 djgpp/%.o: src/%.c
 	$(PFX)gcc -c -o $@ -Isrc -Iqoi $<
 
-qoi/qoiconv: qoi/qoiconv.c
+djgpp/bmp2qoi: tools/bmp2qoi.c
 	gcc -o $@ -Iqoi $<
 
 imgs: GFX/apple.qoi GFX/boom.qoi GFX/doomfont.qoi GFX/loading.qoi GFX/penguin.qoi
 
 GFX/%.qoi: GFX/%.bmp
-	qoi/qoiconv $< $@
+	djgpp/bmp2qoi $< $@

@@ -49,9 +49,12 @@ int main(int argc, char **argv) {
     }
     // Load test image
     int iw, ih;
-    uint32_t *test = qoi_read(img, &iw, &ih, 4);
-    if (!img)
+    qoi_desc desc;
+    uint32_t *test = qoi_read(img, &desc, 4);
+    if (!test)
         fprintf(stderr, "unable to load: %s\n", img);
+    iw = desc.width;
+    ih = desc.height;
     printf("found mode: 0x%04x@0x%08x\n", mode, lfbp);
     getch();
     // Flip it
